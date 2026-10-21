@@ -112,6 +112,21 @@ The method is part of the route, so only `GET /hello` matches. Any other method 
 including `POST /hello` and `/invalid` — is answered by the same catch-all `404 Not Found`.
 The one exception is `CONNECT`: Node.js handles that transport-level method itself, so the
 connection is closed without a response and nothing is written to the request log for it.
+
+A request body is never read: the server answers as soon as it has the request line and
+headers, and nothing that follows them is waited for, stored or looked at. Node.js then
+pulls the rest of the body off the connection and discards it, so a client that keeps
+sending after the answer has been written still costs the process the memory it needs to
+receive and discard that data. Measured on Node.js 22, a 64 MiB upload sent that way
+raised the server's resident memory by roughly 33 MB, and that memory was still held
+after the client had gone: it is memory the process has finished with rather than data
+the server keeps, and a later upload of the same size reuses it rather than adding that
+much again. None of the body is kept — no live buffer outlives the upload — so the cost
+follows the largest body the server has received rather than accumulating with every request.
+The server sets no body-size limit and no request timeout of its own, and applies no rate
+limiting, so keep it on loopback or on another network you trust; the Environment variable
+configuration (PORT) section notes that it binds every local interface.
+
 `curl -i` prints the response headers as well as the body; without `-i` you see the body alone.
 
 ## Expected output examples
