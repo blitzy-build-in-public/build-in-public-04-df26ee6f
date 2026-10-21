@@ -131,7 +131,11 @@ function startServer(port) {
 function handleSigint(server) {
   console.log('Server shutting down');
   server.close(() => {
-    process.exitCode = 0;
+    // A failed bind has already recorded exit status 1, so the shutdown only sets the
+    // status when the start succeeded and nothing has recorded a failure.
+    if (process.exitCode === undefined) {
+      process.exitCode = 0;
+    }
   });
 
   // close() only started closing idle connections in later runtimes, so an idle keep-alive
