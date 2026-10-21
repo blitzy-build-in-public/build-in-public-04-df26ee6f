@@ -56,22 +56,6 @@ function handleNotFoundRequest(req, res) {
   sendText(res, 404, NOT_FOUND_BODY);
 }
 
-function handleConnectRequest(req, socket) {
-  // The runtime reports CONNECT on this separate event with a bare socket instead of a
-  // ServerResponse, so the catch-all 404 is written to that socket and sendText cannot be used.
-  const path = req.url.split('?')[0];
-
-  logRequest(req.method, path);
-  socket.end(
-    'HTTP/1.1 404 Not Found\r\n' +
-    'Content-Type: ' + CONTENT_TYPE + '\r\n' +
-    'Content-Length: ' + NOT_FOUND_BODY.length + '\r\n' +
-    'Date: ' + new Date().toUTCString() + '\r\n' +
-    'Connection: close\r\n\r\n' +
-    NOT_FOUND_BODY
-  );
-}
-
 const ROUTES = {
   ['GET ' + HELLO_PATH]: handleHelloRequest,
 };
@@ -104,9 +88,14 @@ function startServer(port) {
     console.log('Server listening on port ' + port);
   });
 
-  server.on('connect', handleConnectRequest);
-
   server.on('error', (err) => {
+    if (server.listening) {
+      // The port is already bound, so this is not a bind failure and the runtime's own
+      // error is the one that gets written.
+      console.error(err);
+      return;
+    }
+
     if (err.code === 'EADDRINUSE') {
       const suggestedPort = port === MAX_PORT ? port - 1 : port + 1;
 

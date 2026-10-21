@@ -33,6 +33,11 @@ Nothing is installed. There are no packages, no `npm install`, no build step and
 configuration to create — the project has no dependencies at all. Having Node.js installed is
 the entire requirement, so you can run the server directly from the project folder.
 
+This project is a local tutorial rather than a published package: it is not on the npm registry
+and must not be published to it, so do not run `npm publish` here and do not try to install it
+by name. Running it from this folder, with `node server.js` or `npm start`, is the only way to
+use it.
+
 ## Execution
 
 Run the server from the project root, the folder that contains `server.js`.
@@ -105,6 +110,8 @@ Not Found
 
 The method is part of the route, so only `GET /hello` matches. Any other method or path —
 including `POST /hello` and `/invalid` — is answered by the same catch-all `404 Not Found`.
+The one exception is `CONNECT`: Node.js handles that transport-level method itself, so the
+connection is closed without a response and nothing is written to the request log for it.
 `curl -i` prints the response headers as well as the body; without `-i` you see the body alone.
 
 ## Expected output examples
@@ -149,9 +156,9 @@ Content-Length: 9
 Not Found
 ```
 
-The server sets the status code and `Content-Type: text/plain`. `Date`, `Connection`,
-`Keep-Alive` and `Content-Length` are added by Node.js itself, and the `Date` value shown is
-one observed example — it changes with every request.
+For the two responses above, the server sets the status code and `Content-Type: text/plain`;
+`Date`, `Connection`, `Keep-Alive` and `Content-Length` are added by Node.js itself, and the
+`Date` value shown is one observed example — it changes with every request.
 
 **A rejected port value**, printed on stderr with exit status 1 (see Environment variable
 configuration (PORT)):
@@ -201,13 +208,16 @@ start the server again.
 The shutdown line and the port release are immediate: the server stops accepting new
 connections as soon as the signal arrives, so a request made right afterwards fails to connect
 even while the process is still finishing its shutdown. The process exits with status code `0`
-once every open connection has closed — a connection that is idle between requests is closed
-straight away, while a request that is already in flight is allowed to finish. A client that
-keeps a connection open without finishing a request, whether it has sent nothing at all or left
-a request half-written, keeps the process alive until it disconnects: a client that connected
-and stayed silent for 10 seconds deferred the exit by about 9.3 seconds, so the wait follows the
-client's own hold time rather than a fixed timeout in the server. If you need the process to
-stop at once, `kill -TERM` with its process id does not wait.
+once every open connection has closed — a request that is already in flight is allowed to
+finish, and on Node.js `18.2.0` or above a connection that is idle between requests is closed
+straight away. On those versions a client that keeps a connection open without finishing a
+request, whether it has sent nothing at all or left a request half-written, keeps the process
+alive until it disconnects: a client that connected and stayed silent for 10 seconds deferred
+the exit by about 9.3 seconds, so the wait follows the client's own hold time rather than a
+fixed timeout in the server. On Node.js `18.0.x` and `18.1.x` the call that closes idle
+connections does not exist, so an idle keep-alive connection is instead held until its
+keep-alive timeout expires, about 5 seconds, and the process exits afterwards with status code
+`0`. If you need the process to stop at once, `kill -TERM` with its process id does not wait.
 
 Only CTRL+C (SIGINT) is intercepted. A SIGTERM is left to Node.js's default handling, so it
 prints no shutdown line and does not exit with status `0`.
@@ -217,6 +227,12 @@ prints no shutdown line and does not exit with status `0`.
 `PORT` is the whole configuration surface. When it is unset — or set to an empty value — the
 server listens on `3000`. An accepted value is a digit-only integer between `1024` and `65535`
 inclusive: no sign, no decimal point, no whitespace and no radix prefix.
+
+The port is the whole configuration surface, so there is no option for the address the server
+binds: it listens on every local interface, which means both loopback (`http://localhost:3000`)
+and the machine's own network addresses. The request examples in this document all use
+`localhost`; if this machine is on a network, the server is reachable from that network on the
+same port until you stop it.
 
 ```bash
 PORT=4000 npm start
@@ -239,6 +255,7 @@ Invalid PORT "abc": expected an integer between 1024 and 65535. Set PORT to a va
 ```
 
 The `echo $?` above prints `1`. The same message is used for every rejected value, with the
-value you supplied quoted, so `PORT=80`, `PORT=70000`, `PORT=3000.5` and `PORT=-1` all fail
-this way — which is also why the server refuses to bind a privileged port. `PORT=` (empty)
-counts as "not supplied" and falls back to 3000.
+value you supplied quoted — a control character in it, such as a newline or a tab, is shown
+escaped as `\uXXXX` so the message stays on one line — so `PORT=80`, `PORT=70000`, `PORT=3000.5`
+and `PORT=-1` all fail this way, which is also why the server refuses to bind a privileged port.
+`PORT=` (empty) counts as "not supplied" and falls back to 3000.
