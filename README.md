@@ -210,14 +210,17 @@ connections as soon as the signal arrives, so a request made right afterwards fa
 even while the process is still finishing its shutdown. The process exits with status code `0`
 once every open connection has closed — a request that is already in flight is allowed to
 finish, and on Node.js `18.2.0` or above a connection that is idle between requests is closed
-straight away. On those versions a client that keeps a connection open without finishing a
-request, whether it has sent nothing at all or left a request half-written, keeps the process
-alive until it disconnects: a client that connected and stayed silent for 10 seconds deferred
-the exit by about 9.3 seconds, so the wait follows the client's own hold time rather than a
-fixed timeout in the server. On Node.js `18.0.x` and `18.1.x` the call that closes idle
-connections does not exist, so an idle keep-alive connection is instead held until its
-keep-alive timeout expires, about 5 seconds, and the process exits afterwards with status code
-`0`. If you need the process to stop at once, `kill -TERM` with its process id does not wait.
+straight away. On Node.js `18.2.0` through `26.3.x` a client that keeps a connection open
+without finishing a request, whether it has sent nothing at all or left a request half-written,
+keeps the process alive until it disconnects: a client that connected and stayed silent for 10
+seconds deferred the exit by about 9.3 seconds, so the wait follows the client's own hold time
+rather than a fixed timeout in the server. On Node.js `26.4.0` and above a connection that has
+sent nothing at all counts as idle too, so it is closed straight away and a silent client no
+longer delays the exit; only a request left half-written still holds the process that way. On
+Node.js `18.0.x` and `18.1.x` the call that closes idle connections does not exist, so an idle
+keep-alive connection is instead held until its keep-alive timeout expires, about 5 seconds, and
+the process exits afterwards with status code `0`. If you need the process to stop at once,
+`kill -TERM` with its process id does not wait.
 
 Only CTRL+C (SIGINT) is intercepted. A SIGTERM is left to Node.js's default handling, so it
 prints no shutdown line and does not exit with status `0`.
