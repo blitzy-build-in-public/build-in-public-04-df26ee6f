@@ -13,9 +13,17 @@ function parsePort(rawValue) {
     return { valid: true, port: DEFAULT_PORT };
   }
 
+  // Control characters are escaped rather than emitted, so a value carrying a newline
+  // cannot split the one-line stderr record or forge an extra diagnostic line.
+  const quotedValue = rawValue.replace(
+    /[\u0000-\u001f\u007f-\u009f]/g,
+    (char) => '\\u' + char.charCodeAt(0).toString(16).padStart(4, '0')
+  );
+
   const message =
-    'Invalid PORT "' + rawValue + '": expected an integer between 1024 and 65535. ' +
-    'Set PORT to a value in that range, for example PORT=3000, ' +
+    'Invalid PORT "' + quotedValue + '": expected an integer between ' + MIN_PORT +
+    ' and ' + MAX_PORT + '. ' +
+    'Set PORT to a value in that range, for example PORT=' + DEFAULT_PORT + ', ' +
     'and start the server again.';
 
   if (!/^[0-9]+$/.test(rawValue)) {
