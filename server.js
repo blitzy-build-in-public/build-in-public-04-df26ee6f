@@ -56,6 +56,22 @@ function handleNotFoundRequest(req, res) {
   sendText(res, 404, NOT_FOUND_BODY);
 }
 
+function handleConnectRequest(req, socket) {
+  // The runtime reports CONNECT on this separate event with a bare socket instead of a
+  // ServerResponse, so the catch-all 404 is written to that socket and sendText cannot be used.
+  const path = req.url.split('?')[0];
+
+  logRequest(req.method, path);
+  socket.end(
+    'HTTP/1.1 404 Not Found\r\n' +
+    'Content-Type: ' + CONTENT_TYPE + '\r\n' +
+    'Content-Length: ' + NOT_FOUND_BODY.length + '\r\n' +
+    'Date: ' + new Date().toUTCString() + '\r\n' +
+    'Connection: close\r\n\r\n' +
+    NOT_FOUND_BODY
+  );
+}
+
 const ROUTES = {
   ['GET ' + HELLO_PATH]: handleHelloRequest,
 };
@@ -82,17 +98,22 @@ function handleRequest(req, res) {
 
 function startServer(port) {
   const server = http.createServer(handleRequest);
+  let shuttingDown = false;
 
   server.on('listening', () => {
     console.log('Server listening on port ' + port);
   });
 
+  server.on('connect', handleConnectRequest);
+
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
+      const suggestedPort = port === MAX_PORT ? port - 1 : port + 1;
+
       console.error(
         'Cannot start server: port ' + port + ' is already in use (EADDRINUSE). ' +
         'Stop the process using that port or start the server with a different one, ' +
-        'for example PORT=' + (port + 1) + '.'
+        'for example PORT=' + suggestedPort + '.'
       );
     } else {
       console.error(
@@ -106,7 +127,16 @@ function startServer(port) {
   });
 
   server.listen(port);
-  process.on('SIGINT', () => handleSigint(server));
+
+  process.on('SIGINT', () => {
+    // The shutdown runs once: a repeated CTRL+C must not add a second record.
+    if (shuttingDown) {
+      return;
+    }
+
+    shuttingDown = true;
+    handleSigint(server);
+  });
 }
 
 function handleSigint(server) {

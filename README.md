@@ -53,10 +53,11 @@ The same program starts through npm:
 npm start
 ```
 
-`npm` prints two lines of its own before the server's line. Those two are npm's output, not
-the server's:
+`npm` prints a blank line, then two lines of its own, before the server's line. Those two
+lines are npm's output, not the server's:
 
 ```text
+
 > nodejs-tutorial-hello-world@1.0.0 start
 > node server.js
 
@@ -167,9 +168,10 @@ Cannot start server: port 3000 is already in use (EADDRINUSE). Stop the process 
 ```
 
 The port it suggests is the one it tried plus one, so on port 4000 the same message suggests
-`PORT=4001`. Any other bind failure, such as `EACCES` on a port this process may not bind, is
-reported the same way — with the actual error code in place of the example below — and also
-exits with status 1:
+`PORT=4001`. At the top of the accepted range there is no port above, so the message suggests
+the one below instead — `PORT=65534` on `65535`. Any other bind failure, such as `EACCES` on a
+port this process may not bind, is reported the same way — with the actual error code in place of
+the example below — and also exits with status 1:
 
 ```text
 Cannot start server: could not bind port 3000 (EACCES). Check that the port is free and that this process may bind it, then start the server again.
@@ -195,6 +197,17 @@ Server shutting down
 and then exits with status code `0` — without that handling, an interrupted process would
 report `130`. The port is released, so a request made afterwards fails to connect until you
 start the server again.
+
+The shutdown line and the port release are immediate: the server stops accepting new
+connections as soon as the signal arrives, so a request made right afterwards fails to connect
+even while the process is still finishing its shutdown. The process exits with status code `0`
+once every open connection has closed — a connection that is idle between requests is closed
+straight away, while a request that is already in flight is allowed to finish. A client that
+keeps a connection open without finishing a request, whether it has sent nothing at all or left
+a request half-written, keeps the process alive until it disconnects: a client that connected
+and stayed silent for 10 seconds deferred the exit by about 9.3 seconds, so the wait follows the
+client's own hold time rather than a fixed timeout in the server. If you need the process to
+stop at once, `kill -TERM` with its process id does not wait.
 
 Only CTRL+C (SIGINT) is intercepted. A SIGTERM is left to Node.js's default handling, so it
 prints no shutdown line and does not exit with status `0`.
